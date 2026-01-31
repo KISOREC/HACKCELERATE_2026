@@ -1,0 +1,167 @@
+import pygame
+import threading
+import time
+import socket
+import json
+import random
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.connect(("127.0.0.1", 9000))
+sock.setblocking(False)
+move_left = False
+move_right = False
+blink = False
+jump_locked = False
+restart_locked = False
+def eye_control():
+    global move_left, move_right, blink
+    buffer = ""                                                                 
+    while True:
+        try:
+            buffer += sock.recv(1024).decode()
+            while "\n" in buffer:
+                line, buffer = buffer.split("\n", 1)
+                data = json.loads(line)
+
+                blink = data.get("blink", 0) == 1
+                direction = data.get("dir", "NEUTRAL")
+
+                move_left = direction == "LEFT"
+                move_right = direction == "RIGHT"
+        except:
+            pass
+
+threading.Thread(target=eye_control, daemon=True).start()
+pygame.init()
+WIDTH, HEIGHT = 900, 450
+win = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("BCI Dino Game – Wireless")
+
+clock = pygame.time.Clock()
+font = pygame.font.SysFont("consolas", 22)
+big_font = pygame.font.SysFont("consolas", 48)
+SKY = (200, 230, 255)
+GROUND = (80, 80, 80)
+DINO = (40, 180, 160)
+CACTUS = (30, 140, 60)
+CLOUD = (255, 255, 255)
+player_x = WIDTH // 3
+player_y = HEIGHT - 90
+player_w, player_h = 40, 60
+
+jumping = False
+jump_vel = 13
+gravity = 0.6
+jump_y_vel = 0
+ground_x = 0
+score = 0
+game_over = False
+obstacles = []
+clouds = []
+def reset_game():
+    global jumping, jump_y_vel, game_over, obstacles, score
+    global jump_locked, restart_locked
+
+    jumping = False
+    jump_y_vel = 0
+    game_over = False
+    obstacles.clear()
+    score = 0
+    jump_locked = False
+    restart_locked = False
+def draw_dino(x, y):
+    pygame.draw.rect(win, DINO, (x, y, player_w, player_h), border_radius=8)
+    pygame.draw.circle(win, DINO, (x + 30, y + 10), 10)   # head
+    pygame.draw.rect(win, (20, 120, 100), (x + 5, y + player_h - 10, 10, 10))
+    pygame.draw.rect(win, (20, 120, 100), (x + 25, y + player_h - 10, 10, 10))
+
+def draw_ground():
+    global ground_x
+    ground_x -= 6
+    if ground_x <= -WIDTH:
+        ground_x = 0
+    pygame.draw.line(win, GROUND, (ground_x, HEIGHT - 30),
+                     (ground_x + WIDTH, HEIGHT - 30), 4)
+    pygame.draw.line(win, GROUND, (ground_x + WIDTH, HEIGHT - 30),
+                     (ground_x + 2 * WIDTH, HEIGHT - 30), 4)
+
+def draw_clouds():
+    for cloud in clouds:
+        pygame.draw.ellipse(win, CLOUD, cloud)
+reset_game()
+cloud_timer = 0
+obs_timer = 0
+
+running = True
+while running:
+    clock.tick(60)
+    win.fill(SKY)
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+
+    if not game_over:
+        if move_left:
+            player_x -= 4
+        if move_right:
+            player_x += 4
+        player_x = max(0, min(WIDTH - player_w, player_x))
+        if blink and not jumping and not jump_locked:
+            jumping = True
+            jump_y_vel = -jump_vel
+            jump_locked = True
+
+        if not blink:
+            jump_locked = False
+
+        if jumping:
+            player_y += jump_y_vel
+            jump_y_vel += gravity
+            if player_y >= HEIGHT - 90:
+                player_y = HEIGHT - 90
+                jumping = False
+        cloud_timer += 1
+        if cloud_timer > 120:
+            cloud_timer = 0
+            clouds.append(pygame.Rect(WIDTH, random.randint(30, 150), 60, 30))
+        for c in clouds:
+            c.x -= 2
+        clouds[:] = [c for c in clouds if c.x > -60]
+        obs_timer += 1
+        if obs_timer > 90:
+            obs_timer = 0
+            obstacles.append(pygame.Rect(WIDTH, HEIGHT - 60, 25, 40))
+
+        for o in obstacles:
+            o.x -= 6
+        obstacles[:] = [o for o in obstacles if o.x > -30]
+        for o in obstacles:
+            if pygame.Rect(player_x, player_y, player_w, player_h).colliderect(o):
+                game_over = True
+        score += 1
+
+    else:
+        text = big_font.render("GAME OVER", True, (200, 50, 50))
+        restart = font.render("Blink to Restart", True, (80, 80, 80))
+        win.blit(text, (WIDTH // 2 - text.get_width() // 2, HEIGHT // 2 - 40))
+        win.blit(restart, (WIDTH // 2 - restart.get_width() // 2, HEIGHT // 2 + 10))
+        if blink and not restart_locked:
+            reset_game()
+            restart_locked = True
+
+        if not blink:
+            restart_locked = False
+    draw_clouds()
+    draw_ground()
+    draw_dino(player_x, player_y)
+
+    for o in obstacles:
+        pygame.draw.rect(win, CACTUS, o, border_radius=6)
+
+    score_text = font.render(f"Score: {score}", True, (0, 0, 0))
+    win.blit(score_text, (10, 10))
+
+    pygame.display.update()
+
+pygame.quit()
+sock.close()
