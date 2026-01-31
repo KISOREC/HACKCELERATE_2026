@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NEURAL ADMINS | Neural Health Monitoring</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+* { box-sizing: border-box; font-family: "Segoe UI", sans-serif; }
+body { margin: 0; background: #f4f6f9; }
+
+/* ========== LOGIN ========== */
+#loginPage {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(120deg, #0b1c2d, #2a5298);
+  color: white;
+}
+.login-box {
+  background: rgba(255,255,255,0.12);
+  padding: 40px;
+  border-radius: 12px;
+  width: 320px;
+  text-align: center;
+}
+.login-box input, .login-box select {
+  width: 100%;
+  padding: 10px;
+  margin: 10px 0;
+  border-radius: 6px;
+  border: none;
+}
+.login-box button {
+  width: 100%;
+  padding: 10px;
+  background: #2ecc71;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+/* ========== DASHBOARD ========== */
+#dashboard { display: none; }
+
+.sidebar {
+  width: 230px;
+  background: #0b1c2d;
+  min-height: 100vh;
+  color: white;
+  padding: 20px;
+  position: fixed;
+}
+.sidebar h2 { text-align: center; }
+.sidebar ul { list-style: none; padding: 0; }
+.sidebar li {
+  padding: 12px;
+  margin: 8px 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.sidebar li:hover { background: #1f3b57; }
+
+.main {
+  margin-left: 250px;
+  padding: 20px;
+}
+
+/* HEADER */
+.header {
+  background: linear-gradient(90deg, #1f3b57, #2a5298);
+  color: white;
+  padding: 25px;
+  border-radius: 14px;
+}
+
+/* CARDS */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 15px;
+  margin: 20px 0;
+}
+.card {
+  padding: 20px;
+  border-radius: 10px;
+  color: white;
+  text-align: center;
+}
+.green { background: #2ecc71; }
+.blue { background: #3498db; }
+.yellow { background: #f1c40f; color: #333; }
+.red { background: #e74c3c; }
+
+/* CHART */
+.chart-box {
+  background: white;
+  padding: 15px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+}
+#blinkAlert {
+  color: red;
+  font-weight: bold;
+  display: none;
+}
+
+/* ALERT ANIMATION */
+@keyframes flash {
+  0% { background: white; }
+  50% { background: #ff4d4d; }
+  100% { background: white; }
+}
+.alert-active {
+  animation: flash 0.6s 3;
+}
+
+/* MODAL */
+.modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  justify-content: center;
+  align-items: center;
+}
+.modal-content {
+  background: white;
+  padding: 25px;
+  border-radius: 10px;
+  width: 300px;
+}
+.modal-content input, .modal-content button {
+  width: 100%;
+  padding: 10px;
+  margin-top: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<!-- LOGIN -->
+<div id="loginPage">
+  <div class="login-box">
+    <h2>🧠 NEURAL ADMINS</h2>
+    <select><option>Admin</option><option>Doctor</option></select>
+    <input placeholder="Username">
+    <input type="password" placeholder="Password">
+    <button onclick="login()">Login</button>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard">
+
+  <aside class="sidebar">
+    <h2>🧠 NEURAL ADMINS</h2>
+    <ul>
+      <li onclick="openAddUser()">➕ Add Patient</li>
+      <li>📊 Live Signals</li>
+      <li>🚨 Alerts</li>
+      <li>📁 Reports</li>
+      <li onclick="logout()">🚪 Logout</li>
+    </ul>
+  </aside>
+
+  <main class="main">
+    <div class="header">
+      <h1>Neural Health Dashboard</h1>
+      <p>Wireless EEG / EOG Monitoring</p>
+    </div>
+
+    <section class="cards">
+      <div class="card green">Status<br><b id="statusText">Waiting</b></div>
+      <div class="card blue">Alertness<br><b>Active</b></div>
+      <div class="card yellow">Fatigue<br><b>Low</b></div>
+      <div class="card red">Blinks<br><b id="blinkCount">0</b></div>
+    </section>
+
+    <div class="chart-box" id="chartBox">
+      <h3>Live EEG / EOG Signal</h3>
+      <canvas id="eegChart" height="120"></canvas>
+      <p id="blinkAlert">⚠ Blink Detected!</p>
+    </div>
+
+    <div class="chart-box">
+      <h3>Patient Info</h3>
+      <p id="patientInfo">No patient selected</p>
+    </div>
+  </main>
+</div>
+
+<!-- ADD PATIENT -->
+<div class="modal" id="addUserModal">
+  <div class="modal-content">
+    <h3>Add Patient</h3>
+    <input id="pid" placeholder="Patient ID">
+    <input id="pname" placeholder="Patient Name">
+    <button onclick="addUser()">Save</button>
+    <button onclick="closeAddUser()">Cancel</button>
+  </div>
+</div>
+
+<script>
+/* LOGIN */
+function login() {
+  loginPage.style.display = "none";
+  dashboard.style.display = "block";
+}
+function logout() {
+  dashboard.style.display = "none";
+  loginPage.style.display = "flex";
+}
+
+/* ADD USER */
+function openAddUser(){ addUserModal.style.display="flex"; }
+function closeAddUser(){ addUserModal.style.display="none"; }
+function addUser(){
+  patientInfo.innerText =
+    `Patient ID: ${pid.value} | Name: ${pname.value} | Monitoring`;
+  closeAddUser();
+}
+
+/* ===== EXISTING EEG LOGIC (UNCHANGED) ===== */
+let deviceOnline = false;
+let blinkCount = 0;
+let t = 0;
+
+const ctx = eegChart.getContext("2d");
+const chart = new Chart(ctx,{
+  type:"line",
+  data:{labels:[],datasets:[
+    {label:"Signal",data:[],borderColor:"#3498db",tension:.3},
+    {label:"Baseline",data:[],borderColor:"#2ecc71",borderDash:[5,5]}
+  ]},
+  options:{animation:false,scales:{y:{min:0,max:1023}}}
+});
+
+function resetChart(){
+  chart.data.labels=[];
+  chart.data.datasets.forEach(d=>d.data=[]);
+  t=0;
+}
+
+function showDisconnected(){
+  statusText.innerText="Offline";
+}
+function hideDisconnected(){
+  statusText.innerText="Online";
+}
+
+/* FETCH LOOP */
+setInterval(()=>{
+  fetch("/data").then(r=>r.json()).then(d=>{
+    if(!d||d.connected===false){
+      deviceOnline=false;
+      showDisconnected();
+      return;
+    }
+    if(!deviceOnline){ resetChart(); deviceOnline=true; }
+    hideDisconnected();
+
+    chart.data.labels.push(t++);
+    chart.data.datasets[0].data.push(d.signal);
+    chart.data.datasets[1].data.push(d.baseline);
+
+    if(chart.data.labels.length>60){
+      chart.data.labels.shift();
+      chart.data.datasets.forEach(ds=>ds.data.shift());
+    }
+
+    if(d.blink===1){
+      blinkCount++;
+      blinkCountEl.innerText=blinkCount;
+      blinkAlert.style.display="block";
+      chartBox.classList.add("alert-active");
+      setTimeout(()=>{
+        blinkAlert.style.display="none";
+        chartBox.classList.remove("alert-active");
+      },800);
+    }
+
+    chart.update();
+  });
+},100);
+</script>
+
+</body>
+</html>
